@@ -1,0 +1,27 @@
+Beach
+Broadway
+Casino
+Circus Tent
+Bank
+Day Spa
+Hotel
+Restaurant
+Supermarket
+Service Station
+Hospital
+Embassy
+Military Base
+Police Station
+School
+University
+Airplane
+Ocean Liner
+Passenger Train
+Submarine
+Cathedral
+Corporate Party
+Movie Studio
+Crusader Army
+Pirate Ship
+Polar Station
+Space Station
