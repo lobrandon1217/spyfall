@@ -1,2 +1,5 @@
 node_modules/
 .idea/
+frontend/dist
+server/dist
+log*.txt

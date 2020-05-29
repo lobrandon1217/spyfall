@@ -1,6 +1,7 @@
 import Player from "./player";
 import {getRandomPlace, places} from "./places";
 import {Room} from "./rooms";
+import logger from "../logger";
 
 export class Game {
     room: Room;
@@ -22,6 +23,9 @@ export class Game {
         for (let ply of room.players) { this.votes[ply.id] = ''; }
         this.resume();
         this.sendAllData();
+        this.sendLocationData();
+        this.broadcast('chat message',
+            `SERVER: The game has started. ${this.firstPlayer} asks the first question!`);
     }
 
     getRandomPlayer(): Player {
@@ -57,9 +61,30 @@ export class Game {
         this.sendLocationToPlayers();
         this.broadcast('game data', {
             firstPlayer: this.firstPlayer,
-            votes: this.votes,
-            allLocations: places
+            votes: this.votes
         });
+    }
+
+    /**
+     * send places to someone or broadcast it
+     * @param id socket id to send to, optional
+     */
+    sendLocationData(id?: string) {
+        if (id) {
+            try {
+                let player = this.room.players.find(ply => {
+                    return ply.id == id;
+                });
+                if (player) player.socket.emit('location data', places);
+            } catch (e) {
+                logger.log({
+                    message: `Caught exception in sendLocationData: ${e.message}`,
+                    level: 'error'
+                });
+            }
+        } else {
+            this.broadcast('location data', places);
+        }
     }
 
     resume() {
@@ -79,10 +104,12 @@ export class Game {
         this.broadcast('chat message', `${winnerIsSpy? 
             `SERVER: The spy won! The location was ${this.location}` : 
             `SERVER: Non-spies won! The location was ${this.location}`}`);
+        this.broadcast('chat message', `SERVER: The spy was ${this.spyPlayer}`);
         this.room.endGame();
     }
 
     guess(location: string) {
+        this.broadcast('chat message', `SERVER: The spy guessed ${location}`);
         if (location == this.location) {
             return this.endGame(true);
         } else {
@@ -92,7 +119,14 @@ export class Game {
 
     handleLeave(player: Player) {
         if (this.spyPlayer == player.name) {
-            this.endGame(false);
+            this.broadcast('chat message', 'SERVER: Ending game because the spy left');
+            return this.endGame(false);
+        }
+
+        if (player.id in this.votes) {
+            delete this.votes[player.id];
+            this.sendAllData();
+            return this.processAllVotes();
         }
     }
 
@@ -112,11 +146,11 @@ export class Game {
                 if (!player) return;
                 if (this.spyPlayer == player.name) {
                     this.broadcast('chat message', `SERVER: The spy has been voted out!`);
-                    this.endGame(false);
+                    return this.endGame(false);
                 } else {
                     this.broadcast('chat message',
                         'SERVER: The non-spies have voted for the incorrect person!');
-                    this.endGame(true);
+                    return this.endGame(true);
                 }
             }
         })

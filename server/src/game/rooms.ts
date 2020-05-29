@@ -75,16 +75,15 @@ export class Room {
         let needNewHost = false;
 
         if (playerListIndex > -1) {
-            if (this.players[playerListIndex].name) {
+            let player = this.players[playerListIndex];
+            if (player.name == this.host) {
                 // we need a new host
                 needNewHost = true;
-            }
-            if (this.currentState == 2) {
-                this.game.handleLeave(this.players[playerListIndex]);
             }
             this.socket.to(this.id).emit('chat message',
                 `SERVER: ${this.players[playerListIndex].name} has left the game.`);
             this.players.splice(playerListIndex, 1);
+            if (this.currentState == 2) this.game.handleLeave(player);
         }
 
         if (this.players.length == 0) return this.roomManager.deleteRoom(this);
@@ -147,7 +146,7 @@ export class RoomManager {
         newRoom.id = this.generateCode();
         newRoom.roomOptions = roomOptions;
         this.rooms[newRoom.id] = newRoom;
-        let timeoutInMs = 5000;
+        let timeoutInMs = 60000;
         setTimeout(() => {
             if (newRoom.players.length == 0) {
                 this.deleteRoom(newRoom);
@@ -183,11 +182,16 @@ export class RoomManager {
         let publicRooms: Room[] = Object.values(this.rooms)
             .filter(room => room.roomOptions.public && room.currentState == 1);
         let cleanRoomsArr: CleanRoom[] = publicRooms.map((val: Room) => {
-            return {
+            let result = {
                 id: val.id,
                 name: val.roomOptions.name,
-                host: val.host
+                host: val.host,
+                players: []
             };
+            val.players.forEach(player => {
+                result.players.push(player.name)
+            });
+            return result;
         });
         return cleanRoomsArr;
     }
@@ -210,7 +214,7 @@ export class RoomManager {
                     level: 'info',
                     message: `Socket ${client.id} wants name ${name} in room ${room}`
                 });
-                if (name.search(/[a-zA-Z0-9_-]{3,12}/) < 0) {
+                if (name.search(/^[a-zA-Z0-9_-]{3,12}$/) < 0) {
                     return client.emit('server message',
                         'Invalid name. Valid names are 3-12 of these characters: a-z, 0-9, -, _');
                 }
@@ -228,6 +232,7 @@ export class RoomManager {
                     if (roomObj.currentState == 2) {
                         // in game, update the user's stuff
                         roomObj.game.sendAllData();
+                        roomObj.game.sendLocationData(client.id);
                     }
                     client.on('disconnect', () => {
                         this.rooms[room].removePlayer(player.id);
@@ -259,7 +264,7 @@ export class RoomManager {
                     level: 'info',
                     message: `Socket ${client.id} is voting for ${name}`
                 });
-                roomObj.game.vote(client.id, name)
+                if (roomObj.game) roomObj.game.vote(client.id, name);
             });
 
             // player pausing

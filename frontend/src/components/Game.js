@@ -56,10 +56,15 @@ class Game extends React.Component {
         });
 
         this.state.socket.on('game data', data => {
-            this.state.firstPlayer = data.firstPlayer;
-            this.state.votes = data.votes;
+            this.setState({
+                firstPlayer: data.firstPlayer,
+                votes: data.votes
+            });
+        });
+
+        this.state.socket.on('location data', places => {
             this.state.allLocations = {};
-            for (let location of data.allLocations) {
+            for (let location of places) {
                 this.state.allLocations[location] = false;
             }
             this.forceUpdate();
@@ -110,6 +115,7 @@ class Game extends React.Component {
     }
 
     render() {
+        // set the document title test
         let playerList = [];
         let chatbox = <div className={'border'}>
             <div className={'list-group p-2'} style={{
@@ -119,13 +125,14 @@ class Game extends React.Component {
             }} ref={this.bottomScroll}>
                 {this.state.chatLog}
             </div>
-            <input type={'text'} value={this.state.chatBar} className={'form-control'} onKeyDown={
+            <input type={'text'} className={'form-control'} onKeyDown={
                 e => {
                     if (e.key == 'Enter') {
                         this.state.socket.emit('chat message', this.state.chatBar);
                         this.setState({
                             chatBar: ''
                         });
+                        e.target.value = '';
                     }
                 }
             } onChange={e => {
@@ -137,8 +144,10 @@ class Game extends React.Component {
 
         switch (this.state.state) {
             case -1:
+                document.title = 'Connecting... - Spyfall';
                 return <h4>Connecting to game {this.props.match.params.id}...</h4>;
             case 0:
+                document.title = 'Enter Username - Spyfall';
                 return <div>
                     <h4>Enter Username</h4>
                     <p>Enter the username that you want.</p>
@@ -154,6 +163,7 @@ class Game extends React.Component {
                     </p>
                 </div>;
             case 1:
+                document.title = 'In Lobby - Spyfall';
                 if (Object.keys(this.state.players).length > 0) {
                     playerList = this.state.players.players.map((value, index) => {
                         return <li className={'list-group-item'} key={index}>
@@ -183,6 +193,7 @@ class Game extends React.Component {
                             </ul>
                         </div>
                         <div className={'col-8'}>
+                            <b>Chatbox:</b>
                             {chatbox}
                         </div>
                     </div>
@@ -198,6 +209,7 @@ class Game extends React.Component {
                     }
                 </div>;
             case 2:
+                document.title = 'In Game - Spyfall';
                 let cleanVotes = {};
                 Object.keys(this.state.votes).forEach(id => {
                     let name = this.state.votes[id];
@@ -207,7 +219,6 @@ class Game extends React.Component {
                         cleanVotes[name] = 1;
                     }
                 });
-                console.log(cleanVotes);
                 if (Object.keys(this.state.players).length > 0) {
                     playerList = this.state.players.players.map((value, index) => {
                         return <button
@@ -224,8 +235,8 @@ class Game extends React.Component {
                 }
                 let seconds = this.state.seconds % 60;
                 let places = Object.keys(this.state.allLocations).map(loc =>
-                    <div className={'col-4'}>
-                        <button className={`btn my-1 ${this.state.guessing? 'btn-outline-danger' : ''} w-100`}
+                    <div className={'col-4'} key={loc}>
+                        <button className={`btn my-1 ${this.state.guessing? 'btn-danger' : 'btn-outline-secondary'} w-100`}
                                 onClick={e => {
                                     if (this.state.guessing) {
                                         this.state.socket.emit('guess', loc);
@@ -239,7 +250,6 @@ class Game extends React.Component {
                     </div>
                 );
                 return <div>
-                    <h4>In Game</h4>
                     <div className={'container'}>
                         <h4 className={'text-center'}>
                             The location is {this.state.location}
@@ -247,7 +257,9 @@ class Game extends React.Component {
                         <button className={'btn text-center mx-auto d-block'} onClick={e => {
                             this.state.socket.emit('timer click');
                         }}>
-                            {Math.floor(this.state.seconds / 60)}:{seconds < 10 ? `0${seconds}` : seconds}
+                            <span className={'h4'}>
+                                {Math.floor(this.state.seconds / 60)}:{seconds < 10 ? `0${seconds}` : seconds}
+                            </span>
                         </button>
                         <div className={'row'}>
                             <div className={'col-3'}>
@@ -260,7 +272,7 @@ class Game extends React.Component {
                                     }
                                 </div>
                             </div>
-                            <div className={'col-5'}>
+                            <div className={'col-9 mb-2'}>
                                 <div className={'row'}>
                                     <div className={'col-12'}>
                                         <h4 className={'text-center'}>
@@ -272,21 +284,25 @@ class Game extends React.Component {
                                     {places}
                                     {
                                         this.state.isSpy ?
-                                            <div className={'col-12 mt-4'}>
+                                            <div className={'col-12 mt-2'}>
                                                 <button className={'btn btn-outline-danger w-100'}
                                                         onClick={e => {
                                                     this.setState({
                                                         guessing: !this.state.guessing
                                                     });
                                                 }}>
-                                                    Guess Location
+                                                    {
+                                                        this.state.guessing ?
+                                                            'Cancel Guessing' :
+                                                            'Guess Location'
+                                                    }
                                                 </button>
                                             </div> :
                                             ''
                                     }
                                 </div>
                             </div>
-                            <div className={'col-4'}>
+                            <div className={'col-lg-9 offset-lg-3'}>
                                 {chatbox}
                             </div>
                         </div>

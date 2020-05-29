@@ -1,5 +1,6 @@
 import React from 'react';
 import {Link} from 'react-router-dom';
+import {withRouter} from "react-router-dom";
 import LobbyCreator from "./LobbyCreator";
 import LobbyJoiner from "./LobbyJoiner";
 
@@ -8,21 +9,25 @@ class LobbyBrowser extends React.Component {
         super(props);
         this.state = {
             status: 0,
-            rooms: []
+            rooms: [],
+            refreshBtnState: 0
         };
 
         this.getLobbies = this.getLobbies.bind(this);
     }
 
     getLobbies() {
+        this.setState({
+            refreshBtnState: 1
+        });
         let request = new XMLHttpRequest();
         request.open('POST', '/api/getlobbies');
         request.send();
         request.onreadystatechange = e => {
             if (request.readyState == 4 && request.status == 200) {
-                console.log(request.responseText);
                 this.setState({
-                    rooms: JSON.parse(request.responseText)
+                    rooms: JSON.parse(request.responseText),
+                    refreshBtnState: 0
                 });
             }
         }
@@ -33,6 +38,9 @@ class LobbyBrowser extends React.Component {
     }
 
     render() {
+        document.title = ['Lobbies - Spyfall',
+            'Create a Lobby - Spyfall',
+            'Join a Game - Spyfall'][this.state.status];
         let lobbyList = [];
 
         for (let room of this.state.rooms) {
@@ -41,9 +49,15 @@ class LobbyBrowser extends React.Component {
                     <div className={'card'}>
                         <div className={'card-body'}>
                             <div className={'card-title'}>
-                                {room.name}
+                                <strong>{room.name}</strong> <span className={'text-muted'}>by {room.host}</span>
                             </div>
-                            <Link to={`/game/${room.id}`} className={"card-link"}>Join</Link>
+                            <div>Players:</div>
+                            <ul>
+                                {room.players.map(player => <li>{player}</li>)}
+                            </ul>
+                            <button className={'btn btn-outline-success w-100 d-block'} onClick={e => {
+                                this.props.history.push(`/game/${room.id}`);
+                            }}>Join</button>
                         </div>
                     </div>
                 </div>
@@ -59,6 +73,10 @@ class LobbyBrowser extends React.Component {
                 join a private game
             </Link>
             <hr/>
+            <button className={`btn btn-outline-secondary mb-4 ${this.state.refreshBtnState == 1 ? 'disabled' : ''}`}
+                    onClick={e => this.getLobbies()}>
+                {['Refresh', 'Refreshing...'][this.state.refreshBtnState]}
+            </button>
             <div className={"row"}>
                 {lobbyList.length > 0 ? lobbyList : <div className={"col"}>
                     <p>No public lobbies found.</p>
@@ -75,4 +93,4 @@ class LobbyBrowser extends React.Component {
     }
 }
 
-export default LobbyBrowser;
+export default withRouter(LobbyBrowser);

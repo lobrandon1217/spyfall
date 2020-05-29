@@ -45,15 +45,15 @@ var Room = /** @class */ (function () {
         });
         var needNewHost = false;
         if (playerListIndex > -1) {
-            if (this.players[playerListIndex].name) {
+            var player_2 = this.players[playerListIndex];
+            if (player_2.name == this.host) {
                 // we need a new host
                 needNewHost = true;
             }
-            if (this.currentState == 2) {
-                this.game.handleLeave(this.players[playerListIndex]);
-            }
             this.socket.to(this.id).emit('chat message', "SERVER: " + this.players[playerListIndex].name + " has left the game.");
             this.players.splice(playerListIndex, 1);
+            if (this.currentState == 2)
+                this.game.handleLeave(player_2);
         }
         if (this.players.length == 0)
             return this.roomManager.deleteRoom(this);
@@ -108,7 +108,7 @@ var RoomManager = /** @class */ (function () {
         newRoom.id = this.generateCode();
         newRoom.roomOptions = roomOptions;
         this.rooms[newRoom.id] = newRoom;
-        var timeoutInMs = 5000;
+        var timeoutInMs = 60000;
         setTimeout(function () {
             if (newRoom.players.length == 0) {
                 _this.deleteRoom(newRoom);
@@ -144,11 +144,16 @@ var RoomManager = /** @class */ (function () {
         var publicRooms = Object.values(this.rooms)
             .filter(function (room) { return room.roomOptions.public && room.currentState == 1; });
         var cleanRoomsArr = publicRooms.map(function (val) {
-            return {
+            var result = {
                 id: val.id,
                 name: val.roomOptions.name,
-                host: val.host
+                host: val.host,
+                players: []
             };
+            val.players.forEach(function (player) {
+                result.players.push(player.name);
+            });
+            return result;
         });
         return cleanRoomsArr;
     };
@@ -178,21 +183,22 @@ var RoomManager = /** @class */ (function () {
                     if (_this.rooms[room].hasPlayerName(name)) {
                         return client.emit('server message', "The name '" + name + "' currently in use.");
                     }
-                    var player_2 = new player_1.default(client, name);
+                    var player_3 = new player_1.default(client, name);
                     client.join(room);
                     client.emit('joined');
                     roomObj = _this.rooms[room];
-                    _this.rooms[room].addPlayer(player_2);
+                    _this.rooms[room].addPlayer(player_3);
                     client.emit('state', roomObj.currentState);
                     if (roomObj.currentState == 2) {
                         // in game, update the user's stuff
                         roomObj.game.sendAllData();
+                        roomObj.game.sendLocationData(client.id);
                     }
                     client.on('disconnect', function () {
-                        _this.rooms[room].removePlayer(player_2.id);
+                        _this.rooms[room].removePlayer(player_3.id);
                     });
                     socket.to(roomObj.id)
-                        .emit('chat message', "SERVER: " + player_2.name + " has joined the game.");
+                        .emit('chat message', "SERVER: " + player_3.name + " has joined the game.");
                 }
                 else {
                     return client.emit('server message', 'Invalid room ID. Please join a different game.');
@@ -217,7 +223,8 @@ var RoomManager = /** @class */ (function () {
                     level: 'info',
                     message: "Socket " + client.id + " is voting for " + name
                 });
-                roomObj.game.vote(client.id, name);
+                if (roomObj.game)
+                    roomObj.game.vote(client.id, name);
             });
             // player pausing
             client.on('timer click', function () {

@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Game = void 0;
 var places_1 = require("./places");
+var logger_1 = require("../logger");
 var Game = /** @class */ (function () {
     function Game(room) {
         this.room = room;
@@ -16,6 +17,8 @@ var Game = /** @class */ (function () {
         }
         this.resume();
         this.sendAllData();
+        this.sendLocationData();
+        this.broadcast('chat message', "SERVER: The game has started. " + this.firstPlayer + " asks the first question!");
     }
     Game.prototype.getRandomPlayer = function () {
         return this.room.players[Math.floor(Math.random() * this.room.players.length)];
@@ -48,9 +51,32 @@ var Game = /** @class */ (function () {
         this.sendLocationToPlayers();
         this.broadcast('game data', {
             firstPlayer: this.firstPlayer,
-            votes: this.votes,
-            allLocations: places_1.places
+            votes: this.votes
         });
+    };
+    /**
+     * send places to someone or broadcast it
+     * @param id socket id to send to, optional
+     */
+    Game.prototype.sendLocationData = function (id) {
+        if (id) {
+            try {
+                var player = this.room.players.find(function (ply) {
+                    return ply.id == id;
+                });
+                if (player)
+                    player.socket.emit('location data', places_1.places);
+            }
+            catch (e) {
+                logger_1.default.log({
+                    message: "Caught exception in sendLocationData: " + e.message,
+                    level: 'error'
+                });
+            }
+        }
+        else {
+            this.broadcast('location data', places_1.places);
+        }
     };
     Game.prototype.resume = function () {
         var _this = this;
@@ -69,9 +95,11 @@ var Game = /** @class */ (function () {
         this.broadcast('chat message', "" + (winnerIsSpy ?
             "SERVER: The spy won! The location was " + this.location :
             "SERVER: Non-spies won! The location was " + this.location));
+        this.broadcast('chat message', "SERVER: The spy was " + this.spyPlayer);
         this.room.endGame();
     };
     Game.prototype.guess = function (location) {
+        this.broadcast('chat message', "SERVER: The spy guessed " + location);
         if (location == this.location) {
             return this.endGame(true);
         }
@@ -81,7 +109,13 @@ var Game = /** @class */ (function () {
     };
     Game.prototype.handleLeave = function (player) {
         if (this.spyPlayer == player.name) {
-            this.endGame(false);
+            this.broadcast('chat message', 'SERVER: Ending game because the spy left');
+            return this.endGame(false);
+        }
+        if (player.id in this.votes) {
+            delete this.votes[player.id];
+            this.sendAllData();
+            return this.processAllVotes();
         }
     };
     Game.prototype.processAllVotes = function () {
@@ -102,11 +136,11 @@ var Game = /** @class */ (function () {
                     return;
                 if (_this.spyPlayer == player.name) {
                     _this.broadcast('chat message', "SERVER: The spy has been voted out!");
-                    _this.endGame(false);
+                    return _this.endGame(false);
                 }
                 else {
                     _this.broadcast('chat message', 'SERVER: The non-spies have voted for the incorrect person!');
-                    _this.endGame(true);
+                    return _this.endGame(true);
                 }
             }
         });
